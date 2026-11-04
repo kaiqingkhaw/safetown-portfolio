@@ -149,3 +149,17 @@ assert.equal(run('pendingImport'), null);
 run('pendingImport = [{...reports[0], title:"Conflict"}]; applyImport()');
 assert.equal(run('reports.length'), 5, 'Conflicts do not change stored reports');
 console.log('PASS: backup compatibility, validation, conflict detection, idempotency and atomic import.');
+
+// Two installations seed the same IDs but at different times.
+run(`const fresh = seed().map(r => ({...r, sample:true}));
+  const old = fresh.map(r => ({...r, created:'2020-01-01T00:00:00Z'}));
+  const submitted = {...old[0], id:'ST-9191', sample:false, title:'Garden gate'};
+  const prior = [...old, submitted];
+  const transfer = decodeBackup(JSON.stringify({project:'SafeTown',schemaVersion:1,reports:backupRecords(prior,'created')}));`);
+assert.equal(run("planImport(fresh, backupRecords(prior,'all')).conflicts.length"),4);
+assert.equal(run("planImport(fresh, transfer).conflicts.length"),0);
+assert.equal(run("planImport(fresh, transfer).additions[0].id"),'ST-9191');
+assert.equal(run("JSON.stringify(transfer[0].events)"),run("JSON.stringify(submitted.events)"));
+assert.equal(run("planImport([...fresh,submitted], transfer).duplicates"),1);
+assert.equal(run("backupRecords(fresh,'created').length"),0);
+console.log('PASS: portable backups restore non-sample reports across fresh installations.');
