@@ -655,7 +655,21 @@ function applyImport() {
     toast(`${plan.additions.length} reports imported. Existing records were preserved.`);
   }
 }
-function exportData() {
+function backupRecords(records, scope) {
+  if (scope === "all") return records.slice();
+  if (scope === "created") return records.filter(r => !isSample(r));
+  throw Error("Unknown backup selection.");
+}
+function exportForm() {
+  const count = backupRecords(reports, "created").length;
+  show(closeHead("Choose what to back up") +
+    '<p>To move reports to another browser, leave out the sample neighbourhood. Its examples are generated separately on each device.</p>' +
+    '<div class="actions"><button class="btn" data-backup="created" ' + (!count ? 'disabled' : '') + '>Back up non-sample reports (' + count + ')</button>' +
+    '<button class="btn secondary" data-backup="all">Back up everything (' + reports.length + ')</button></div>' +
+    '<p class="muted">A full backup includes edits to sample reports. Both options include the selected reports’ photos and repair history.</p>');
+}
+function exportData(scope) {
+  const selected = backupRecords(reports, scope);
   const a = document.createElement("a");
   const url = URL.createObjectURL(
     new Blob(
@@ -666,7 +680,7 @@ function exportData() {
             schemaVersion: 1,
             type: "Prototype browser data; not verified operational records",
             exportedAt: new Date().toISOString(),
-            reports,
+            reports: selected,
           },
           null,
           2,
@@ -676,7 +690,7 @@ function exportData() {
     ),
   );
   a.href = url;
-  a.download = "safetown-demo-reports.json";
+  a.download = "safetown-" + scope + "-reports.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -690,7 +704,8 @@ document.addEventListener("click", (e) => {
   if (!t) return;
   if (t.dataset.action === "close") modal.close();
   if (t.dataset.action === "report") reportForm();
-  if (t.dataset.action === "export") exportData();
+  if (t.dataset.action === "export") exportForm();
+  if (t.dataset.backup) { exportData(t.dataset.backup); modal.close(); }
   if (t.dataset.action === "import") importForm();
   if (t.dataset.action === "apply-import") applyImport();
   if (t.dataset.action === "recover" && unreadableRecords !== null) {
