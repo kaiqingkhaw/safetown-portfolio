@@ -118,3 +118,58 @@ assert.equal(run("commitChange(()=>reports[0].votes++)"), false);
 assert.equal(stored.get("safetown-v2"), savedBeforeRecovery);
 run("unreadableRecords = null");
 console.log("PASS: reporting, persistence, invalid routes and saved-data recovery regression checks.");
+
+// Backups accept legacy exports and version 1 without overwriting current records.
+const backup = (reports, extra = {}) => JSON.stringify({ project: 'SafeTown', reports, ...extra });
+const original = JSON.parse(run('JSON.stringify(seed())'));
+const decoded = raw => run(`decodeBackup(${JSON.stringify(raw)})`);
+assert.equal(decoded(backup(original)).length, 4);
+assert.equal(decoded(backup(original, { schemaVersion: 1 })).length, 4);
+assert.equal(decoded(backup([])).length, 0);
+for (const raw of ['{', 'null', '{}', backup(original, {schemaVersion: 99}), backup([original[0], original[0]]), backup([{...original[0], priority:'Urgent'}]), backup([{...original[0], sample:'false'}]), backup([{...original[0], id:'ST-99999999999999999999'}]), backup([{...original[0], resolvedAt:'invalid'}]), backup([{...original[0], photo:'javascript:alert(1)'}]), backup(Array(1001).fill(original[0]))]) {
+  assert.throws(() => decoded(raw));
+}
+assert.throws(() => decoded(' '.repeat(10 * 1024 * 1024 + 1)));
+run('reports = decodeBackup(JSON.stringify({project:"SafeTown", reports:seed()}))');
+assert.equal(run('planImport(reports, reports).duplicates'), 4);
+assert.equal(run('planImport(reports, [{...reports[0], title:"Changed"}]).conflicts.length'), 1);
+assert.equal(run('planImport(reports, [{...reports[0], id:"ST-2000"}]).additions.length'), 1);
+assert.equal(run('planImport(reports, [Object.fromEntries(Object.entries(reports[0]).reverse())]).duplicates'), 1);
+run('pendingImport = [{...reports[0], id:"ST-2000"}]');
+const beforeImport = run('JSON.stringify(reports)');
+storageFails = true;
+run('applyImport()');
+assert.equal(run('JSON.stringify(reports)'), beforeImport, 'Quota failure rolls back the whole import');
+assert.equal(run('pendingImport.length'), 1, 'Failed import remains available for retry');
+storageFails = false;
+run('modal.close = () => {}; applyImport()');
+assert.equal(run('reports.length'), 5);
+assert.equal(JSON.parse(stored.get('safetown-v2')).length, 5);
+assert.equal(run('pendingImport'), null);
+run('pendingImport = [{...reports[0], title:"Conflict"}]; applyImport()');
+assert.equal(run('reports.length'), 5, 'Conflicts do not change stored reports');
+console.log('PASS: backup compatibility, validation, conflict detection, idempotency and atomic import.');
+
+// Two installations seed the same IDs but at different times.
+run(`const fresh = seed().map(r => ({...r, sample:true}));
+  const old = fresh.map(r => ({...r, created:'2020-01-01T00:00:00Z'}));
+  const submitted = {...old[0], id:'ST-9191', sample:false, title:'Garden gate'};
+  const prior = [...old, submitted];
+  const transfer = decodeBackup(JSON.stringify({project:'SafeTown',schemaVersion:1,reports:backupRecords(prior,'created')}));`);
+assert.equal(run("planImport(fresh, backupRecords(prior,'all')).conflicts.length"),4);
+assert.equal(run("planImport(fresh, transfer).conflicts.length"),0);
+assert.equal(run("planImport(fresh, transfer).additions[0].id"),'ST-9191');
+assert.equal(run("JSON.stringify(transfer[0].events)"),run("JSON.stringify(submitted.events)"));
+assert.equal(run("planImport([...fresh,submitted], transfer).duplicates"),1);
+assert.equal(run("backupRecords(fresh,'created').length"),0);
+console.log('PASS: portable backups restore non-sample reports across fresh installations.');
+
+const garden = run("seed().find(r => r.id === 'ST-1044')");
+const boundary = Date.parse(garden.accessPlan.until);
+assert.equal(run(`planState(${JSON.stringify(garden)}, ${boundary - 1})`), 'current');
+assert.equal(run(`planState(${JSON.stringify(garden)}, ${boundary})`), 'expired');
+garden.accessPlan.flagged = true;
+assert.equal(run(`accessPanel(${JSON.stringify(garden)}, false)`).includes(garden.accessPlan.note), false);
+garden.accessPlan.until = 'invalid';
+assert.equal(run(`validReport(${JSON.stringify(garden)})`), false);
+console.log('PASS: temporary access expiry, disputed directions and backup validation.');
