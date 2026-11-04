@@ -92,7 +92,7 @@ assert.equal(
 );
 storageFails = false;
 assert.equal(run("commitChange(()=>{reports[0].votes+=1})"), true);
-assert.equal(JSON.parse(stored.get("safetown-v2"))[0].votes, 8);
+assert.equal(JSON.parse(stored.get("safetown-portfolio-v1"))[0].votes, 8);
 assert.equal(
   run("esc('<img onerror=alert(1)>')"),
   "&lt;img onerror=alert(1)&gt;",
@@ -113,9 +113,9 @@ assert.throws(() => run("decodeReports(JSON.stringify([seed()[0], seed()[0]]))")
 assert.equal(run("validReport({...seed()[0], photo: 'bad-image'})"), false);
 assert.equal(run("validReport({...seed()[0], events: null})"), false);
 run("unreadableRecords = 'broken data'");
-const savedBeforeRecovery = stored.get("safetown-v2");
+const savedBeforeRecovery = stored.get("safetown-portfolio-v1");
 assert.equal(run("commitChange(()=>reports[0].votes++)"), false);
-assert.equal(stored.get("safetown-v2"), savedBeforeRecovery);
+assert.equal(stored.get("safetown-portfolio-v1"), savedBeforeRecovery);
 run("unreadableRecords = null");
 console.log("PASS: reporting, persistence, invalid routes and saved-data recovery regression checks.");
 
@@ -144,7 +144,7 @@ assert.equal(run('pendingImport.length'), 1, 'Failed import remains available fo
 storageFails = false;
 run('modal.close = () => {}; applyImport()');
 assert.equal(run('reports.length'), 5);
-assert.equal(JSON.parse(stored.get('safetown-v2')).length, 5);
+assert.equal(JSON.parse(stored.get('safetown-portfolio-v1')).length, 5);
 assert.equal(run('pendingImport'), null);
 run('pendingImport = [{...reports[0], title:"Conflict"}]; applyImport()');
 assert.equal(run('reports.length'), 5, 'Conflicts do not change stored reports');
