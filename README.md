@@ -1,5 +1,7 @@
 # SafeTown
 
+[Open the live demo](https://kaiqingkhaw.github.io/safetown-portfolio/public/)
+
 When a footpath is blocked, a resident has two questions. How do I get through today? Who will check that the repair worked? SafeTown follows one report through both decisions.
 
 ![SafeTown township dashboard](docs/preview.png)
