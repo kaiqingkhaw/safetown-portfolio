@@ -1,61 +1,20 @@
-# SafeTown | Report recovery
+# SafeTown
 
-SafeTown helps a township resident follow a blocked path or broken light from the initial report to a repair they can check. The [original browser prototype](https://kaiqingkhaw.github.io/safetown/public/) was a Team Vortex project for University Hackathon 2026. This separate repository explores what happens to those reports when local data needs to be restored.
+When a footpath is blocked, a resident has two questions. How do I get through today? Who will check that the repair worked? SafeTown follows one report through both decisions.
 
-**[Browse the portfolio implementation](https://github.com/kaiqingkhaw/safetown-portfolio/tree/codex/portfolio-backups)** · [Import code](https://github.com/kaiqingkhaw/safetown-portfolio/blob/codex/portfolio-backups/public/app.js) · [Regression tests](https://github.com/kaiqingkhaw/safetown-portfolio/blob/codex/portfolio-backups/tests/smoke.cjs)
+![SafeTown township dashboard](docs/preview.png)
 
-![Team Vortex prototype interface](docs/preview.png)
+## Try the garden entrance
 
-## Why an import needs a preview
+Open `public/index.html` in a browser. The sample neighbourhood includes a fallen branch at the Community Garden. Open **Community reports**, find **Fallen branch across the footpath**, and open its progress view. Under **Temporary access**, select **This approach is blocked**. The directions disappear and the report records why.
 
-The team prototype could export its reports. Someone returning with a backup had no way to bring those records back through the interface. Simply replacing the browser's copy would risk losing newer repair notes.
+Open the same report in the **Management desk**. Under **Update access instructions**, describe a checked approach and set a review interval. Reopen the resident view to see the replacement instructions and review time. The example uses fictional locations.
 
-The extension checks the file before writing anything. A new report ID can be added. If the ID and contents match, it skips the duplicate, even if JSON keys are in a different order. If the ID matches but the contents differ, it rejects the whole import. That last choice costs convenience, but makes a disagreement visible instead of guessing which repair history to keep. A failed storage write rolls back the change.
+## Implementation
 
-## Try it in two minutes
+The original reporting and resident-verified repair workflow was a Team Vortex University Hackathon 2026 project. This personal portfolio edition adds time-limited access instructions, resident challenges and report backup recovery. A backup import previews additions and duplicates. Conflicting histories stop the import before it writes to storage.
 
-Use Node.js 22 or later. The extension is on the branch below; the public hackathon demo shows the original team version.
+The app uses HTML, CSS and browser JavaScript. Roles are simulated and records are stored in the current browser. Use Node.js 22 or later for the development tools.
 
-```sh
-git clone --branch codex/portfolio-backups https://github.com/kaiqingkhaw/safetown-portfolio.git
-cd safetown-portfolio
-npm start
-```
-
-Open http://127.0.0.1:5173 with a fresh browser profile. Save the example below as **example-backup.json**.
-
-1. Open **Community reports → Import backup** and choose the file. The preview should show one new report. Choose **Add these reports**, then search for **ST-9100**.
-2. Choose the same file again. The preview should show zero new reports and one duplicate.
-3. Change only the title in the file and import it again. The app should identify **ST-9100** as a conflict. The original title should still appear in Community reports.
-
-<details><summary>Example backup (fictional report)</summary>
-
-```json
-{
-  "project": "SafeTown",
-  "schemaVersion": 1,
-  "reports": [{
-    "id": "ST-9100",
-    "title": "Uneven paving beside the garden gate",
-    "description": "Fictional example for checking backup recovery.",
-    "location": "Community Garden",
-    "category": "Damaged walkway",
-    "priority": "Medium",
-    "barrier": "Passable",
-    "affected": "Wheelchair and mobility-aid users",
-    "status": "Reported",
-    "sample": true,
-    "votes": 0,
-    "created": "2026-10-28T09:00:00.000Z",
-    "events": [{"text": "Example report created", "at": "2026-10-28T09:00:00.000Z"}]
-  }]
-}
-```
-
-</details>
-
-## Verification and limits
-
-Run `npm run check` to run the tests and build the app. The regression suite covers legacy exports, unsupported formats, conflicts and failed writes. The three example outcomes above were checked against the import logic. Manual desktop file-picker and mobile layout checks are still pending.
-
-Reports and photos stay in one browser. Roles are simulated; importing a report does not authenticate its author. This prototype has not been trialled with a township, and no improvement in real repair times has been measured.
+- `npm start` serves the app locally.
+- `npm run check` runs the regression suite and builds a self-contained `dist/SafeTown.html` for offline demonstrations.
