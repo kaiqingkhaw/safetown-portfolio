@@ -60,6 +60,10 @@ function seed() {
     },
     {
       id: "ST-1044",
+      accessPlan: {
+        note: "Use the garden entrance beside the market. The grounds crew checked the paved approach this morning.",
+        checked: hoursAgo(1), until: hoursAgo(-7), flagged: false,
+      },
       title: "Fallen branch across the footpath",
       category: "Obstruction",
       location: "Community Garden",
@@ -107,7 +111,7 @@ function validReport(r) {
     ["Reported", "In progress", "Awaiting verification", "Resolved"].includes(r.status) &&
     Number.isInteger(r.votes) && r.votes >= 0 && date(r.created) &&
     Array.isArray(r.events) && r.events.every(e => e && typeof e.text === "string" && date(e.at)) &&
-    photo(r.photo) && photo(r.repairPhoto) &&
+    (!("accessPlan" in r) || validPlan(r.accessPlan)) && photo(r.photo) && photo(r.repairPhoto) &&
     (!r.previousRepairs || (Array.isArray(r.previousRepairs) && r.previousRepairs.every(p => p && photo(p.photo) && date(p.at))));
 }
 function decodeReports(raw) {
@@ -303,7 +307,7 @@ function reportPage() {
       "Every report has a next step.",
       "Check an existing issue, add an observation, or review a repair.",
     ) +
-    `<div class="toolbar"><input id="search" aria-label="Search reports" placeholder="Search by issue, place, or report ID"><select id="filter" aria-label="Filter by status"><option>All statuses</option>${["Reported", "In progress", "Awaiting verification", "Resolved"].map((s) => `<option>${s}</option>`).join("")}</select><button class="btn secondary" data-action="export">Export records ↓</button></div><div class="cards" id="report-cards"></div>`
+    `<div class="toolbar"><input id="search" aria-label="Search reports" placeholder="Search by issue, place, or report ID"><select id="filter" aria-label="Filter by status"><option>All statuses</option>${["Reported", "In progress", "Awaiting verification", "Resolved"].map((s) => `<option>${s}</option>`).join("")}</select><button class="btn secondary" data-action="export">Export records ↓</button><button class="btn secondary" data-action="import">Import backup ↑</button></div><div class="cards" id="report-cards"></div>`
   );
 }
 
@@ -513,6 +517,29 @@ function refreshReportHints() {
     : "";
 }
 
+function validPlan(plan) {
+  return !!plan && typeof plan.note === "string" && plan.note.trim().length > 0 &&
+    plan.note.length <= 400 && typeof plan.flagged === "boolean" &&
+    typeof plan.checked === "string" && typeof plan.until === "string" &&
+    Date.parse(plan.until) > Date.parse(plan.checked);
+}
+function planState(r, now = Date.now()) {
+  if (!["Reported", "In progress"].includes(r.status) || !r.accessPlan) return "none";
+  if (r.accessPlan.flagged) return "flagged";
+  return now >= Date.parse(r.accessPlan.until) ? "expired" : "current";
+}
+function accessPanel(r, manage) {
+  if (!["Reported", "In progress"].includes(r.status)) return "";
+  const state = planState(r);
+  const plan = r.accessPlan;
+  const note = state === "current"
+    ? `<p>${esc(plan.note)}</p><small>Checked ${stamp(plan.checked)} MYT · Review by ${stamp(plan.until)} MYT</small>`
+    : `<p>${({none:"No temporary access instructions have been posted.",flagged:"A resident flagged the instructions. The maintenance team needs to check the approach again.",expired:"The review time has passed. Updated instructions are needed."})[state]}</p>`;
+  const controls = manage
+    ? `<details><summary>Update access instructions</summary><form id="access-form" data-id="${r.id}"><label>Which approach did you check?<textarea required maxlength="400" name="note" placeholder="Describe the entrance, surface and a visible landmark."></textarea></label><label>Check again in<select name="hours"><option value="2">2 hours</option><option value="8">8 hours</option><option value="24">24 hours</option></select></label><button type="submit" class="btn">Post checked instructions</button></form></details>`
+    : state === "current" ? `<button class="btn secondary" data-flag-plan="${r.id}">This approach is blocked</button>` : "";
+  return `<section class="panel"><div class="eyebrow">WHILE WORK IS UNDERWAY</div><h3>Temporary access</h3>${note}${controls}</section>`;
+}
 function detail(id, manage = false) {
   const r = reports.find((x) => x.id === id);
   if (!r) return;
@@ -525,7 +552,7 @@ function detail(id, manage = false) {
     current = steps.indexOf(r.status);
   show(
     closeHead(esc(r.title)) +
-      `<div class="detail-summary"><span>${r.id} · ${esc(r.location)}</span><span>${isSample(r) ? "SAMPLE RECORD" : "LOCAL DEMO REPORT"}</span></div><div class="progress-track">${steps.map((x, i) => `<div class="${i <= current ? "done" : ""}"><i>${i < current ? "✓" : i + 1}</i><span>${["Reported", "In progress", "Ready to check", "Verified"][i]}</span></div>`).join("")}</div>${badge(r)} <span class="badge ${r.priority === "High" ? "red" : ""}">${esc(r.priority)} priority</span><p class="detail-desc">${esc(r.description)}</p><dl class="facts"><div><dt>Submitted</dt><dd>${stamp(r.created)}</dd></div><div><dt>Assigned to</dt><dd>${esc(r.assignee || "Awaiting assignment")}</dd></div><div><dt>Reported access</dt><dd>${esc(r.barrier || "Not recorded")}</dd></div><div><dt>People affected</dt><dd>${esc(r.affected || "Not recorded")}</dd></div></dl><div class="evidence-grid">${r.photo ? `<figure><img class="evidence" src="${r.photo}" alt="Photo submitted with the report"><figcaption>Reported condition</figcaption></figure>` : ""}${r.repairPhoto ? `<figure><img class="evidence" src="${r.repairPhoto}" alt="Management repair photo"><figcaption>${r.status === "Reported" ? "Previous repair evidence" : "Management repair evidence"}</figcaption></figure>` : ""}</div>${r.repairNote ? `<p class="detail-desc"><b>Repair notes:</b> ${esc(r.repairNote)}</p>` : ""}${r.previousRepairs?.length ? `<details class="previous-evidence"><summary>${r.previousRepairs.length} previous repair submission(s)</summary>${r.previousRepairs.map((p) => `<figure><img class="evidence" src="${p.photo}" alt="Previous repair submission"><figcaption>${stamp(p.at)} · ${esc(p.note)}</figcaption></figure>`).join("")}</details>` : ""}<h3 class="timeline-title">Activity & accountability</h3><div class="timeline">${r.events.map((e) => `<div class="event">${esc(e.text)}<small>${stamp(e.at)} MYT</small></div>`).join("")}</div>${manage ? managementForm(r) : `<div class="actions">${r.status === "Reported" || r.status === "In progress" ? `<button class="btn secondary" data-confirm="${r.id}" ${r.confirmed ? "disabled" : ""}>${r.confirmed ? "✓ Observation added" : `I also noticed this · ${r.votes}`}</button>` : ""}${r.status === "Awaiting verification" ? `<button class="btn" data-review="${r.id}">Check the repair →</button>` : ""}${r.status === "Resolved" ? `<button class="btn secondary" data-reopen="${r.id}">The issue has returned</button>` : ""}</div>`}`,
+      `<div class="detail-summary"><span>${r.id} · ${esc(r.location)}</span><span>${isSample(r) ? "SAMPLE RECORD" : "LOCAL DEMO REPORT"}</span></div><div class="progress-track">${steps.map((x, i) => `<div class="${i <= current ? "done" : ""}"><i>${i < current ? "✓" : i + 1}</i><span>${["Reported", "In progress", "Ready to check", "Verified"][i]}</span></div>`).join("")}</div>${badge(r)} <span class="badge ${r.priority === "High" ? "red" : ""}">${esc(r.priority)} priority</span><p class="detail-desc">${esc(r.description)}</p><dl class="facts"><div><dt>Submitted</dt><dd>${stamp(r.created)}</dd></div><div><dt>Assigned to</dt><dd>${esc(r.assignee || "Awaiting assignment")}</dd></div><div><dt>Reported access</dt><dd>${esc(r.barrier || "Not recorded")}</dd></div><div><dt>People affected</dt><dd>${esc(r.affected || "Not recorded")}</dd></div></dl><div class="evidence-grid">${r.photo ? `<figure><img class="evidence" src="${r.photo}" alt="Photo submitted with the report"><figcaption>Reported condition</figcaption></figure>` : ""}${r.repairPhoto ? `<figure><img class="evidence" src="${r.repairPhoto}" alt="Management repair photo"><figcaption>${r.status === "Reported" ? "Previous repair evidence" : "Management repair evidence"}</figcaption></figure>` : ""}</div>${r.repairNote ? `<p class="detail-desc"><b>Repair notes:</b> ${esc(r.repairNote)}</p>` : ""}${r.previousRepairs?.length ? `<details class="previous-evidence"><summary>${r.previousRepairs.length} previous repair submission(s)</summary>${r.previousRepairs.map((p) => `<figure><img class="evidence" src="${p.photo}" alt="Previous repair submission"><figcaption>${stamp(p.at)} · ${esc(p.note)}</figcaption></figure>`).join("")}</details>` : ""}${accessPanel(r,manage)}<h3 class="timeline-title">Activity & accountability</h3><div class="timeline">${r.events.map((e) => `<div class="event">${esc(e.text)}<small>${stamp(e.at)} MYT</small></div>`).join("")}</div>${manage ? managementForm(r) : `<div class="actions">${r.status === "Reported" || r.status === "In progress" ? `<button class="btn secondary" data-confirm="${r.id}" ${r.confirmed ? "disabled" : ""}>${r.confirmed ? "✓ Observation added" : `I also noticed this · ${r.votes}`}</button>` : ""}${r.status === "Awaiting verification" ? `<button class="btn" data-review="${r.id}">Check the repair →</button>` : ""}${r.status === "Resolved" ? `<button class="btn secondary" data-reopen="${r.id}">The issue has returned</button>` : ""}</div>`}`,
   );
 }
 function verificationForm(id) {
@@ -575,7 +602,101 @@ async function readPhoto(file) {
 function event(r, text) {
   r.events.push({ text, at: new Date().toISOString() });
 }
-function exportData() {
+const BACKUP_LIMIT = 10 * 1024 * 1024;
+function decodeBackup(raw) {
+  if (typeof raw !== "string" || new Blob([raw]).size > BACKUP_LIMIT)
+    throw Error("Choose a backup smaller than 10 MB.");
+  let backup;
+  try { backup = JSON.parse(raw); }
+  catch { throw Error("This file is not valid JSON."); }
+  if (!backup || backup.project !== "SafeTown" ||
+      (backup.schemaVersion !== undefined && backup.schemaVersion !== 1) ||
+      !Array.isArray(backup.reports) || backup.reports.length > 1000)
+    throw Error("Choose a supported SafeTown export with at most 1,000 reports.");
+  const decoded = decodeReports(JSON.stringify(backup.reports));
+  if (decoded.some(r => !["High", "Medium", "Low"].includes(r.priority) ||
+    !locations.includes(r.location) || !Object.hasOwn(icons, r.category) ||
+    !Number.isSafeInteger(Number(r.id.slice(3))) || Number(r.id.slice(3)) >= Number.MAX_SAFE_INTEGER ||
+    ["sample", "confirmed", "everVerified"].some(k => r[k] !== undefined && typeof r[k] !== "boolean") ||
+    ["acknowledgedAt", "lastManagementUpdate", "cycleOpened", "repairedAt", "resolvedAt"].some(k =>
+      r[k] != null && (typeof r[k] !== "string" || !Number.isFinite(Date.parse(r[k]))))))
+    throw Error("The backup contains unsupported report values.");
+  return decoded.map(r => ({
+    ...r, sample: r.sample === undefined ? true : r.sample,
+  }));
+}
+// Compare objects without depending on JSON property order.
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(
+    Object.keys(value).sort().map(key => [key, canonical(value[key])]),
+  );
+  return value;
+}
+function planImport(existing, incoming) {
+  const byId = new Map(existing.map(r => [r.id, r]));
+  const additions = [], conflicts = [];
+  let duplicates = 0;
+  for (const report of incoming) {
+    const current = byId.get(report.id);
+    if (!current) additions.push(report);
+    else if (JSON.stringify(canonical(current)) === JSON.stringify(canonical(report))) duplicates++;
+    else conflicts.push(report.id);
+  }
+  return { additions, conflicts, duplicates };
+}
+let pendingImport = null;
+let importRevision = 0;
+function importForm() {
+  importRevision++;
+  pendingImport = null;
+  show(closeHead("Import a backup") +
+    '<p class="subtitle">Add records from a SafeTown JSON export. Existing records are never replaced. This transfers local demo data, not verified identities.</p>' +
+    '<label>SafeTown backup (JSON, up to 10 MB)<input id="backup-file" type="file" accept=".json,application/json"></label>' +
+    '<div id="import-preview" role="status" aria-live="polite">Choose a file to preview its records.</div>');
+}
+async function previewImport(file) {
+  const revision = ++importRevision;
+  pendingImport = null;
+  const preview = document.querySelector("#import-preview");
+  if (!file) return;
+  try {
+    if (file.size > BACKUP_LIMIT) throw Error("Choose a backup smaller than 10 MB.");
+    const incoming = decodeBackup(await file.text());
+    if (revision !== importRevision || !modal.open || !document.querySelector("#backup-file")) return;
+    const plan = planImport(reports, incoming);
+    if (plan.conflicts.length) throw Error(`Conflicting report IDs: ${plan.conflicts.join(", ")}. No records imported. Keep both exports and resolve the differences before importing.`);
+    pendingImport = incoming;
+    preview.innerHTML = `<p><strong>${plan.additions.length}</strong> new reports. ${plan.duplicates} identical records will be skipped.</p>` +
+      (plan.additions.length ? '<button class="btn" data-action="apply-import">Add these reports</button>' : '<p>There are no new records to add.</p>');
+  } catch (error) { if (revision === importRevision) preview.textContent = error.message; }
+}
+function applyImport() {
+  if (!pendingImport) return;
+  const plan = planImport(reports, pendingImport);
+  if (plan.conflicts.length) { toast("Records changed since the preview. Choose the backup again."); return; }
+  if (!plan.additions.length) return;
+  if (commitChange(() => { reports.push(...plan.additions); })) {
+    pendingImport = null;
+    modal.close(); render();
+    toast(`${plan.additions.length} reports imported. Existing records were preserved.`);
+  }
+}
+function backupRecords(records, scope) {
+  if (scope === "all") return records.slice();
+  if (scope === "created") return records.filter(r => !isSample(r));
+  throw Error("Unknown backup selection.");
+}
+function exportForm() {
+  const count = backupRecords(reports, "created").length;
+  show(closeHead("Choose what to back up") +
+    '<p>To move reports to another browser, leave out the sample neighbourhood. Its examples are generated separately on each device.</p>' +
+    '<div class="actions"><button class="btn" data-backup="created" ' + (!count ? 'disabled' : '') + '>Back up non-sample reports (' + count + ')</button>' +
+    '<button class="btn secondary" data-backup="all">Back up everything (' + reports.length + ')</button></div>' +
+    '<p class="muted">A full backup includes edits to sample reports. Both options include the selected reports’ photos and repair history.</p>');
+}
+function exportData(scope) {
+  const selected = backupRecords(reports, scope);
   const a = document.createElement("a");
   const url = URL.createObjectURL(
     new Blob(
@@ -583,9 +704,10 @@ function exportData() {
         JSON.stringify(
           {
             project: "SafeTown",
+            schemaVersion: 1,
             type: "Prototype browser data; not verified operational records",
             exportedAt: new Date().toISOString(),
-            reports,
+            reports: selected,
           },
           null,
           2,
@@ -595,7 +717,7 @@ function exportData() {
     ),
   );
   a.href = url;
-  a.download = "safetown-demo-reports.json";
+  a.download = "safetown-" + scope + "-reports.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -607,9 +729,20 @@ document.addEventListener("click", (e) => {
   }
   const t = e.target.closest("button,[data-detail]");
   if (!t) return;
+  if (t.dataset.flagPlan) {
+    const report = reports.find(item => item.id === t.dataset.flagPlan);
+    if (report && planState(report) === "current" && commitChange(() => {
+      report.accessPlan.flagged = true;
+      report.events.push({text:"Resident flagged the temporary approach as blocked", at:new Date().toISOString()});
+    })) detail(report.id);
+    return;
+  }
   if (t.dataset.action === "close") modal.close();
   if (t.dataset.action === "report") reportForm();
-  if (t.dataset.action === "export") exportData();
+  if (t.dataset.action === "export") exportForm();
+  if (t.dataset.backup) { exportData(t.dataset.backup); modal.close(); }
+  if (t.dataset.action === "import") importForm();
+  if (t.dataset.action === "apply-import") applyImport();
   if (t.dataset.action === "recover" && unreadableRecords !== null) {
     const link = document.createElement("a");
     const url = URL.createObjectURL(new Blob([unreadableRecords], {type: "application/json"}));
@@ -670,6 +803,7 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", async (e) => {
   if (e.target.id === "filter") cards();
+  if (e.target.id === "backup-file") await previewImport(e.target.files[0]);
   if (e.target.id === "route-preference") {
     routePreference = e.target.value;
     render();
@@ -696,6 +830,7 @@ document.addEventListener("submit", async (e) => {
   if (
     ![
       "report-form",
+      "access-form",
       "manage-form",
       "repair-form",
       "verify-form",
@@ -713,6 +848,14 @@ document.addEventListener("submit", async (e) => {
     let resultId = form.dataset.id;
     const r = reports.find((x) => x.id === resultId),
       now = new Date().toISOString();
+    if (form.id === "access-form") {
+      const hours = Number(data.get("hours"));
+      const note = data.get("note").trim();
+      if (!r || !["Reported", "In progress"].includes(r.status) || ![2,8,24].includes(hours) || !note || note.length > 400)
+        throw Error("Check the report and enter access instructions.");
+      r.accessPlan = {note, checked:now, until:new Date(Date.parse(now) + hours * 3600000).toISOString(), flagged:false};
+      r.events.push({text:"Maintenance posted checked temporary access instructions", at:now});
+    }
     if (form.id === "report-form") {
       const title = data.get("title").trim(),
         description = data.get("description").trim();
@@ -773,6 +916,7 @@ document.addEventListener("submit", async (e) => {
       r.repairPhoto = photo;
       r.repairNote = note;
       r.repairedAt = now;
+      delete r.accessPlan;
       r.status = "Awaiting verification";
       event(
         r,
@@ -817,7 +961,7 @@ document.addEventListener("submit", async (e) => {
       detail(resultId);
       toast(`Report ${resultId} saved.`);
     } else {
-      detail(resultId, ["manage-form", "repair-form"].includes(form.id));
+      detail(resultId, ["access-form", "manage-form", "repair-form"].includes(form.id));
       toast(
         form.id === "verify-form"
           ? "Repair verified by the resident."
