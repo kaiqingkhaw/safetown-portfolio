@@ -269,7 +269,7 @@ function overview() {
       "Look after the places we share.",
       "Neighbourhood reports, visible progress, and repairs checked by residents.",
     ) +
-    `<section class="feature-grid"><div class="feature-copy"><span class="edition">THE NEIGHBOURHOOD DESK <span>01 / SERI RIMBA</span></span><h2>Reported. <br>Repaired. <br><em>Checked by you.</em></h2><p>A broken light should not disappear into a message thread. Give it a location, an owner, and a clear next step.</p><div class="actions"><button class="btn" data-action="report">Report an issue <span>↗</span></button><a class="text-link" href="#reports">Follow a report →</a></div><div class="feature-foot"><span class="live-dot"></span> Local prototype <span>All starting records are illustrative.</span></div></div><div class="feature-map"><div class="panel-head"><div><span class="eyebrow">NEIGHBOURHOOD SNAPSHOT</span><h2>Where attention is needed</h2></div><span class="badge">Sample map</span></div>${map()}<div class="legend"><span><i class="dot"></i>Open reports by location</span><span><i class="dot red"></i>Overdue attention</span></div></div></section><div class="stats">${[
+    `<section class="feature-grid"><div class="feature-copy"><span class="edition">THE NEIGHBOURHOOD DESK <span>01 / SERI RIMBA</span></span><h2>Reported. <br>Repaired. <br><em>Checked by you.</em></h2><p>A broken light should not disappear into a message thread. Give it a location, an owner, and a clear next step.</p><div class="actions"><button class="btn" data-action="report">Report an issue <span>↗</span></button><a class="text-link" href="#reports">Follow a report →</a></div><div class="feature-foot"><span class="live-dot"></span> Local prototype <span>All starting records are illustrative.</span></div></div><div class="feature-map"><div class="panel-head"><div><span class="eyebrow">NEIGHBOURHOOD SNAPSHOT</span><h2>Where attention is needed</h2></div><span class="badge">Sample map</span></div>${map()}<div class="legend"><span><i class="dot"></i>Open reports by location</span><span><i class="dot red"></i>Overdue attention</span></div></div></section>${accessOverview()}<div class="stats">${[
       [open.length, "Open reports", "Includes repairs awaiting verification"],
       [due.length, "Need a follow-up", "No recent management update"],
       [pending.length, "Ready to check", "Repair evidence submitted"],
@@ -482,7 +482,9 @@ function render() {
       ? '<span class="avatar">TM</span><span>Township team<small>Management demo</small></span>'
       : '<span class="avatar">AR</span><span>Aina Rahman<small>Resident demo</small></span>';
 }
+let accessExpiryTimer;
 function show(content) {
+  clearTimeout(accessExpiryTimer);
   document.querySelector("#modal-content").innerHTML =
     `<div class="modal-body">${content}</div>`;
   if (!modal.open) modal.showModal();
@@ -528,17 +530,47 @@ function planState(r, now = Date.now()) {
   if (r.accessPlan.flagged) return "flagged";
   return now >= Date.parse(r.accessPlan.until) ? "expired" : "current";
 }
+function accessOverview() {
+  const plans = reports.filter(r => planState(r) !== "none");
+  if (!plans.length) return "";
+  return `<section class="access-overview" aria-label="Temporary access updates">
+    <div><span class="eyebrow">GETTING THROUGH TODAY</span><h2>While repairs are underway</h2>
+    <p>Check the latest approach and tell the team if conditions have changed.</p></div>
+    <div class="access-list">${plans.map(r => `<button class="access-item" data-detail="${r.id}">
+      <span><strong>${esc(r.location)}</strong><small>${esc(r.title)}</small></span>
+      <span class="badge ${planState(r) === "current" ? "" : "red"}">${planState(r) === "current" ? "View access update" : "Needs a fresh check"} →</span>
+    </button>`).join("")}</div></section>`;
+}
+function accessReadout(r) {
+  const state = planState(r);
+  const plan = r.accessPlan;
+  const labels = {current:"Within review period", flagged:"Resident flagged an obstruction", expired:"Review overdue", none:"Awaiting instructions"};
+  const text = state === "current"
+    ? `<p>${esc(plan.note)}</p><small>Checked ${stamp(plan.checked)} MYT · Review by ${stamp(plan.until)} MYT</small>`
+    : `<p>${({none:"No temporary access instructions have been posted.", flagged:"A resident flagged the instructions. The maintenance team needs to check the approach again.", expired:"The review time has passed. Updated instructions are needed."})[state]}</p>`;
+  return `<span class="badge ${["flagged","expired"].includes(state) ? "red" : ""}">${labels[state]}</span>${text}`;
+}
+function refreshAccessAtExpiry(r) {
+  const panel = document.querySelector("[data-access-readout]");
+  if (!panel || planState(r) !== "current") return;
+  const delay = Math.min(2147483647, Math.max(1, Date.parse(r.accessPlan.until) - Date.now()));
+  accessExpiryTimer = setTimeout(() => {
+    if (!modal.open) return;
+    panel.innerHTML = accessReadout(r);
+    if (planState(r) !== "current") {
+      modal.querySelector("[data-flag-plan]")?.remove();
+    } else {
+      refreshAccessAtExpiry(r);
+    }
+  }, delay);
+}
 function accessPanel(r, manage) {
   if (!["Reported", "In progress"].includes(r.status)) return "";
   const state = planState(r);
-  const plan = r.accessPlan;
-  const note = state === "current"
-    ? `<p>${esc(plan.note)}</p><small>Checked ${stamp(plan.checked)} MYT · Review by ${stamp(plan.until)} MYT</small>`
-    : `<p>${({none:"No temporary access instructions have been posted.",flagged:"A resident flagged the instructions. The maintenance team needs to check the approach again.",expired:"The review time has passed. Updated instructions are needed."})[state]}</p>`;
   const controls = manage
     ? `<details><summary>Update access instructions</summary><form id="access-form" data-id="${r.id}"><label>Which approach did you check?<textarea required maxlength="400" name="note" placeholder="Describe the entrance, surface and a visible landmark."></textarea></label><label>Check again in<select name="hours"><option value="2">2 hours</option><option value="8">8 hours</option><option value="24">24 hours</option></select></label><button type="submit" class="btn">Post checked instructions</button></form></details>`
     : state === "current" ? `<button class="btn secondary" data-flag-plan="${r.id}">This approach is blocked</button>` : "";
-  return `<section class="panel"><div class="eyebrow">WHILE WORK IS UNDERWAY</div><h3>Temporary access</h3>${note}${controls}</section>`;
+  return `<section class="access-panel"><div class="eyebrow">WHILE WORK IS UNDERWAY</div><h3>Temporary access</h3><div data-access-readout aria-live="polite">${accessReadout(r)}</div>${controls}</section>`;
 }
 function detail(id, manage = false) {
   const r = reports.find((x) => x.id === id);
@@ -554,6 +586,7 @@ function detail(id, manage = false) {
     closeHead(esc(r.title)) +
       `<div class="detail-summary"><span>${r.id} · ${esc(r.location)}</span><span>${isSample(r) ? "SAMPLE RECORD" : "LOCAL DEMO REPORT"}</span></div><div class="progress-track">${steps.map((x, i) => `<div class="${i <= current ? "done" : ""}"><i>${i < current ? "✓" : i + 1}</i><span>${["Reported", "In progress", "Ready to check", "Verified"][i]}</span></div>`).join("")}</div>${badge(r)} <span class="badge ${r.priority === "High" ? "red" : ""}">${esc(r.priority)} priority</span><p class="detail-desc">${esc(r.description)}</p><dl class="facts"><div><dt>Submitted</dt><dd>${stamp(r.created)}</dd></div><div><dt>Assigned to</dt><dd>${esc(r.assignee || "Awaiting assignment")}</dd></div><div><dt>Reported access</dt><dd>${esc(r.barrier || "Not recorded")}</dd></div><div><dt>People affected</dt><dd>${esc(r.affected || "Not recorded")}</dd></div></dl><div class="evidence-grid">${r.photo ? `<figure><img class="evidence" src="${r.photo}" alt="Photo submitted with the report"><figcaption>Reported condition</figcaption></figure>` : ""}${r.repairPhoto ? `<figure><img class="evidence" src="${r.repairPhoto}" alt="Management repair photo"><figcaption>${r.status === "Reported" ? "Previous repair evidence" : "Management repair evidence"}</figcaption></figure>` : ""}</div>${r.repairNote ? `<p class="detail-desc"><b>Repair notes:</b> ${esc(r.repairNote)}</p>` : ""}${r.previousRepairs?.length ? `<details class="previous-evidence"><summary>${r.previousRepairs.length} previous repair submission(s)</summary>${r.previousRepairs.map((p) => `<figure><img class="evidence" src="${p.photo}" alt="Previous repair submission"><figcaption>${stamp(p.at)} · ${esc(p.note)}</figcaption></figure>`).join("")}</details>` : ""}${accessPanel(r,manage)}<h3 class="timeline-title">Activity & accountability</h3><div class="timeline">${r.events.map((e) => `<div class="event">${esc(e.text)}<small>${stamp(e.at)} MYT</small></div>`).join("")}</div>${manage ? managementForm(r) : `<div class="actions">${r.status === "Reported" || r.status === "In progress" ? `<button class="btn secondary" data-confirm="${r.id}" ${r.confirmed ? "disabled" : ""}>${r.confirmed ? "✓ Observation added" : `I also noticed this · ${r.votes}`}</button>` : ""}${r.status === "Awaiting verification" ? `<button class="btn" data-review="${r.id}">Check the repair →</button>` : ""}${r.status === "Resolved" ? `<button class="btn secondary" data-reopen="${r.id}">The issue has returned</button>` : ""}</div>`}`,
   );
+  refreshAccessAtExpiry(r);
 }
 function verificationForm(id) {
   const r = reports.find((x) => x.id === id);
