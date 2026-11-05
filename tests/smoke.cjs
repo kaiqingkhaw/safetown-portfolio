@@ -173,3 +173,17 @@ assert.equal(run(`accessPanel(${JSON.stringify(garden)}, false)`).includes(garde
 garden.accessPlan.until = 'invalid';
 assert.equal(run(`validReport(${JSON.stringify(garden)})`), false);
 console.log('PASS: temporary access expiry, disputed directions and backup validation.');
+
+// An open report must stop displaying instructions when their review time passes.
+let expiryCallback;
+const originalTimeout = sandbox.setTimeout;
+sandbox.setTimeout = callback => { expiryCallback = callback; return 1; };
+run("const expiringReport = seed().find(r => r.id === 'ST-1044'); modal.open = true; refreshAccessAtExpiry(expiringReport);");
+assert.equal(typeof expiryCallback, 'function');
+run("expiringReport.accessPlan.until = '2020-01-01T00:00:00Z'");
+expiryCallback();
+const expiryReadout = nodes.get("[data-access-readout]").innerHTML;
+assert.ok(expiryReadout.includes("Review overdue"));
+assert.ok(!expiryReadout.includes("Use the garden entrance"));
+sandbox.setTimeout = originalTimeout;
+console.log('PASS: an open report withdraws access instructions at expiry.');
