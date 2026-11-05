@@ -8,7 +8,7 @@ When a footpath is blocked, a resident has two questions. How do I get through t
 
 ## Try the garden entrance
 
-Open `public/index.html` in a browser. The sample neighbourhood includes a fallen branch at the Community Garden. Open **Community reports**, find **Fallen branch across the footpath**, and open its progress view. Under **Temporary access**, select **This approach is blocked**. The directions disappear and the report records why.
+Open the live demo above. On the overview, select the Community Garden access update. The sample neighbourhood includes a fallen branch at the Community Garden. Open **Community reports**, find **Fallen branch across the footpath**, and open its progress view. Under **Temporary access**, select **This approach is blocked**. The directions disappear and the report records why.
 
 Open the same report in the **Management desk**. Under **Update access instructions**, describe a checked approach and set a review interval. Reopen the resident view to see the replacement instructions and review time. The example uses fictional locations.
 
@@ -20,3 +20,24 @@ The app uses HTML, CSS and browser JavaScript. Roles are simulated and records a
 
 - `npm start` serves the app locally.
 - `npm run check` runs the regression suite and builds a self-contained `dist/SafeTown.html` for offline demonstrations.
+
+## Local setup
+
+```sh
+git clone https://github.com/kaiqingkhaw/safetown-portfolio.git
+cd safetown-portfolio
+npm start
+```
+
+Open the address printed by the server. The app has no installation dependencies.
+
+## Design decisions
+
+- Access instructions have a review deadline. An open report withdraws them when that deadline passes.
+- Residents can flag a blocked approach. Replacement instructions require a new maintenance update.
+- Repair evidence and resident verification are separate steps so the history explains who did what.
+- Backups are checked before import. A conflicting report stops the import, and a failed storage write rolls back the change.
+
+## Scope
+
+This is a browser prototype with fictional locations and simulated roles. Reports are saved on the current device. A shared deployment would need authenticated accounts, a database, moderation and verified location data.
