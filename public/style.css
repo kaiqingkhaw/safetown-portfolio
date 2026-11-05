@@ -1976,3 +1976,55 @@ footer {
   line-height: 1.6;
   z-index: 2;
 }
+
+/* Access updates remain prominent beside the maintenance workflow. */
+.access-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 28px;
+  align-items: center;
+  margin: 24px 0;
+  padding: 28px;
+  border: 1px solid #cdded3;
+  border-radius: 18px;
+  background: #edf4ed;
+}
+.access-overview h2 { margin: 8px 0; font-size: 23px; }
+.access-overview p { color: #52665d; line-height: 1.6; margin: 0; }
+.access-list { display: grid; gap: 10px; }
+.access-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 18px;
+  background: white;
+  border: 1px solid #d8e3da;
+  border-radius: 12px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.access-item:hover { border-color: var(--green); }
+.access-item strong, .access-item small { display: block; }
+.access-item small { margin-top: 6px; color: #52665d; line-height: 1.5; }
+.access-item .badge { flex-shrink: 0; }
+.access-panel {
+  margin: 24px 0;
+  padding: 22px;
+  border: 1px solid #cdded3;
+  border-left: 4px solid var(--green);
+  border-radius: 12px;
+  background: #f2f7f1;
+}
+.access-panel h3 { margin: 8px 0 14px; }
+.access-panel p { line-height: 1.65; }
+.access-panel small { display: block; color: #52665d; line-height: 1.6; }
+.access-panel button, .access-panel details { margin-top: 18px; }
+.access-panel summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 760px) {
+  .access-overview { grid-template-columns: 1fr; padding: 20px; gap: 18px; }
+  .access-item { align-items: flex-start; flex-direction: column; gap: 12px; }
+}
