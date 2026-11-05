@@ -9,8 +9,8 @@ for (const name of ['index.html', 'style.css', 'app.js']) {
 }
 const read = name => fs.readFileSync(path.join(source, name), 'utf8');
 const portable = read('index.html')
-  .replace(/<link\s+rel="stylesheet"\s+href="style\.css"\s*\/?>/, () => '<style>' + read('style.css') + '</style>')
-  .replace(/<script\s+src="app\.js"><\/script>/, () => '<script>' + read('app.js') + '</script>');
-if (/href="style\.css"|src="app\.js"/.test(portable)) throw Error('Portable build failed to inline assets.');
+  .replace(/<link\s+rel="stylesheet"\s+href="style\.css(?:\?v=[0-9]+)?"\s*\/?>/, () => '<style>' + read('style.css') + '</style>')
+  .replace(/<script\s+src="app\.js(?:\?v=[0-9]+)?"><\/script>/, () => '<script>' + read('app.js') + '</script>');
+if (/href="style\.css(?:\?v=[0-9]+)?"|src="app\.js(?:\?v=[0-9]+)?"/.test(portable)) throw Error('Portable build failed to inline assets.');
 fs.writeFileSync(path.join(output, 'SafeTown.html'), portable, 'utf8');
 console.log('Built dist/ and dist/SafeTown.html');
